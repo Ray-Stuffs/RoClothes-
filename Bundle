@@ -8,7 +8,9 @@ local humanoid = char:WaitForChild("Humanoid")
 local desc = humanoid:GetAppliedDescription()
 local bodyColors = char:FindFirstChildOfClass("BodyColors")
 
-local parts = {
+-- r15 has the same 6 colors as r6, nothing to convert
+-- {BodyColors name, HumanoidDescription name}
+local colorProps = {
 	{"HeadColor3", "HeadColor"},
 	{"TorsoColor3", "TorsoColor"},
 	{"LeftArmColor3", "LeftArmColor"},
@@ -17,35 +19,13 @@ local parts = {
 	{"RightLegColor3", "RightLegColor"},
 }
 
-local clothing = {
-	"Roblox Breasts Clothing",
-	"Roblox Shirt",
-	"Roblox Butt Shirt",
-	"Roblox Pants",
-}
+-- r6 can't show layered accessories, so only the 8 rigid types
+local rigidTypes = {"Hat", "Hair", "Face", "Neck", "Shoulder", "Front", "Back", "Waist"}
 
-local preset = {
-	{"Tone", "Base"},
-	{"Face", false},
-	{"AccessorySizeLock", false},
-	{"BodyPartPhysics", false},
-	{"PhysicsObeyGravity", true},
-	{"RealtimeBodyTransparency", true},
-	{"PositionPhysicsMultiply", 1},
-	{"RotationPhysicsMultiply", 4},
-	{"BreastsScale", 1},
-	{"ButtsScale", 1},
-	{"LegsScale", 1},
-	{"BreastsType", 1},
-	{"TorsoType", 1},
-	{"ArmType", 1},
-	{"LegsType", 1},
-	{"ButtType", 1},
-	{"HardcoreHP", false},
-	{"TopHP", nil},
-	{"BottomHP", nil},
-	{"DamageSFX", nil},
-	{"Volume", nil},
+-- only used if GetAccessories errors
+local accessoryProps = {
+	"HatAccessory", "HairAccessory", "FaceAccessory", "ShouldersAccessory",
+	"NeckAccessory", "FrontAccessory", "BackAccessory", "WaistAccessory",
 }
 
 local function rgb(c)
@@ -53,86 +33,109 @@ local function rgb(c)
 		math.round(c.R * 255), math.round(c.G * 255), math.round(c.B * 255))
 end
 
-local function lit(v)
-	if v == nil then return "nil" end
-	if type(v) == "string" then return string.format("%q", v) end
-	return tostring(v)
+local colors = ""
+for _, p in ipairs(colorProps) do
+	local col = bodyColors and bodyColors[p[1]] or desc[p[2]]
+	colors = colors .. string.format('\t\t["%s"] = %s,\n', p[1], rgb(col))
 end
 
-local rigidTypes = {
-	[Enum.AccessoryType.Hat] = true,
-	[Enum.AccessoryType.Hair] = true,
-	[Enum.AccessoryType.Face] = true,
-	[Enum.AccessoryType.Neck] = true,
-	[Enum.AccessoryType.Shoulder] = true,
-	[Enum.AccessoryType.Front] = true,
-	[Enum.AccessoryType.Back] = true,
-	[Enum.AccessoryType.Waist] = true,
-}
+local accessories = {}
+local seen = {}
 
-local function getAccessories()
-	local ids, seen = {}, {}
-	for _, acc in ipairs(desc:GetAccessories(true)) do
-		local id = acc.AssetId
-		if rigidTypes[acc.AccessoryType] and not acc.IsLayered and id ~= 0 and not seen[id] then
-			seen[id] = true
-			table.insert(ids, id)
+local function addAccessory(id)
+	if id and id ~= 0 and not seen[id] then
+		seen[id] = true
+		table.insert(accessories, id)
+	end
+end
+
+-- true = include the rigid ones too
+local ok, list = pcall(function()
+	return desc:GetAccessories(true)
+end)
+
+if ok then
+	for _, acc in ipairs(list) do
+		if not acc.IsLayered and table.find(rigidTypes, acc.AccessoryType.Name) then
+			addAccessory(acc.AssetId)
 		end
 	end
-	return ids
+else
+	for _, prop in ipairs(accessoryProps) do
+		for id in tostring(desc[prop]):gmatch("%d+") do
+			addAccessory(tonumber(id))
+		end
+	end
 end
 
-local out = {}
-local function add(s, ...)
-	table.insert(out, select("#", ...) > 0 and s:format(...) or s)
+local accessoryLines = ""
+for _, id in ipairs(accessories) do
+	accessoryLines = accessoryLines .. string.format("\t\t%d,\n", id)
 end
 
-add('["%s"] = {', BUNDLE_NAME)
+-- %d so long ids don't turn into 1e+14
+local shirt = desc.Shirt ~= 0 and string.format("%d", desc.Shirt) or "nil"
+local pants = desc.Pants ~= 0 and string.format("%d", desc.Pants) or "nil"
 
-add('\t["Body Color"] = {')
-for _, p in ipairs(parts) do
-	local col = bodyColors and bodyColors[p[1]] or desc[p[2]]
-	add('\t\t["%s"] = %s,', p[1], rgb(col))
-end
-add("\t},\n")
+local result = string.format([[
+["%s"] = {
+	["Body Color"] = {
+%s	},
 
-add('\t["Accessory"] = {')
-for _, id in ipairs(getAccessories()) do
-	add("\t\t%d,", id)
-end
-add("\t},\n")
+	["Accessory"] = {
+%s	},
 
-add('\t["TailAccessory"] = nil,\n')
+	["TailAccessory"] = nil,
 
-add('\t["Clothes"] = {')
-add('\t\t["Shirt"] = %s,', lit(desc.Shirt ~= 0 and desc.Shirt or nil))
-add('\t\t["Pants"] = %s,', lit(desc.Pants ~= 0 and desc.Pants or nil))
-add("\t},\n")
+	["Clothes"] = {
+		["Shirt"] = %s,
+		["Pants"] = %s,
+	},
 
-add('\t["TClothes"] = {')
-add('\t\t["Shirt"] = nil,')
-add('\t\t["Pants"] = nil,')
-add("\t},\n")
+	["TClothes"] = {
+		["Shirt"] = nil,
+		["Pants"] = nil,
+	},
 
-add('\t["Clothing"] = {')
-for _, name in ipairs(clothing) do
-	add('\t\t"%s",', name)
-end
-add("\t},\n")
+	["Clothing"] = {
+		"Roblox Breasts Clothing",
+		"Roblox Shirt",
+		"Roblox Butt Shirt",
+		"Roblox Pants",
+	},
 
-add('\t["Preset"] = {')
-for _, v in ipairs(preset) do
-	add("\t\t%s = %s,", v[1], lit(v[2]))
-end
-add("\t},")
+	["Preset"] = {
+		Tone = "Base",
+		Face = false,
+		AccessorySizeLock = false,
+		BodyPartPhysics = false,
+		PhysicsObeyGravity = true,
+		RealtimeBodyTransparency = true,
+		PositionPhysicsMultiply = 1,
+		RotationPhysicsMultiply = 4,
+		BreastsScale = 1,
+		ButtsScale = 1,
+		LegsScale = 1,
+		BreastsType = 1,
+		TorsoType = 1,
+		ArmType = 1,
+		LegsType = 1,
+		ButtType = 1,
+		HardcoreHP = false,
+		TopHP = nil,
+		BottomHP = nil,
+		DamageSFX = nil,
+		Volume = nil,
+	},
+}]], BUNDLE_NAME, colors, accessoryLines, shirt, pants)
 
-add("}")
-
-local result = table.concat(out, "\n")
 print(result)
 
 if copy then
-	pcall(copy, result)
+	local copied, err = pcall(copy, result)
+	if not copied then
+		warn("Couldn't copy: " .. tostring(err))
+	end
 else
 	warn("Clipboard not supported.")
 end
