@@ -1,0 +1,127 @@
+local BUNDLE_NAME = "BUNDLE NAME HERE"
+
+local copy = setclipboard or toclipboard or (syn and syn.setclipboard) or (fluxus and fluxus.setclipboard)
+
+local player = game:GetService("Players").LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local humanoid = char:WaitForChild("Humanoid")
+local desc = humanoid:GetAppliedDescription()
+local bodyColors = char:FindFirstChildOfClass("BodyColors")
+
+local parts = {
+	{"HeadColor3", "HeadColor"},
+	{"TorsoColor3", "TorsoColor"},
+	{"LeftArmColor3", "LeftArmColor"},
+	{"RightArmColor3", "RightArmColor"},
+	{"LeftLegColor3", "LeftLegColor"},
+	{"RightLegColor3", "RightLegColor"},
+}
+
+local clothing = {
+	"Roblox Breasts Clothing",
+	"Roblox Shirt",
+	"Roblox Butt Shirt",
+	"Roblox Pants",
+}
+
+local preset = {
+	{"Tone", "Base"},
+	{"Face", false},
+	{"AccessorySizeLock", false},
+	{"BodyPartPhysics", false},
+	{"PhysicsObeyGravity", true},
+	{"RealtimeBodyTransparency", true},
+	{"PositionPhysicsMultiply", 1},
+	{"RotationPhysicsMultiply", 4},
+	{"BreastsScale", 1},
+	{"ButtsScale", 1},
+	{"LegsScale", 1},
+	{"BreastsType", 1},
+	{"TorsoType", 1},
+	{"ArmType", 1},
+	{"LegsType", 1},
+	{"ButtType", 1},
+	{"HardcoreHP", false},
+	{"TopHP", nil},
+	{"BottomHP", nil},
+	{"DamageSFX", nil},
+	{"Volume", nil},
+}
+
+local function rgb(c)
+	return string.format("Color3.fromRGB(%d, %d, %d)",
+		math.round(c.R * 255), math.round(c.G * 255), math.round(c.B * 255))
+end
+
+local function lit(v)
+	if v == nil then return "nil" end
+	if type(v) == "string" then return string.format("%q", v) end
+	return tostring(v)
+end
+
+local function getAccessories()
+	local ids, seen = {}, {}
+	for _, acc in ipairs(desc:GetAccessories(true)) do
+		local id = acc.AssetId
+		if id ~= 0 and not seen[id] then
+			seen[id] = true
+			table.insert(ids, id)
+		end
+	end
+	return ids
+end
+
+local out = {}
+local function add(s, ...)
+	table.insert(out, select("#", ...) > 0 and s:format(...) or s)
+end
+
+add('["%s"] = {', BUNDLE_NAME)
+
+add('\t["Body Color"] = {')
+for _, p in ipairs(parts) do
+	local col = bodyColors and bodyColors[p[1]] or desc[p[2]]
+	add('\t\t["%s"] = %s,', p[1], rgb(col))
+end
+add("\t},\n")
+
+add('\t["Accessory"] = {')
+for _, id in ipairs(getAccessories()) do
+	add("\t\t%d,", id)
+end
+add("\t},\n")
+
+add('\t["TailAccessory"] = nil,\n')
+
+add('\t["Clothes"] = {')
+add('\t\t["Shirt"] = %s,', lit(desc.Shirt ~= 0 and desc.Shirt or nil))
+add('\t\t["Pants"] = %s,', lit(desc.Pants ~= 0 and desc.Pants or nil))
+add("\t},\n")
+
+add('\t["TClothes"] = {')
+add('\t\t["Shirt"] = nil,')
+add('\t\t["Pants"] = nil,')
+add("\t},\n")
+
+add('\t["Clothing"] = {')
+for _, name in ipairs(clothing) do
+	add('\t\t"%s",', name)
+end
+add("\t},\n")
+
+add('\t["Preset"] = {')
+for _, v in ipairs(preset) do
+	add("\t\t%s = %s,", v[1], lit(v[2]))
+end
+add("\t},")
+
+add("}")
+
+local result = table.concat(out, "\n")
+print(result)
+
+if copy then
+	pcall(copy, result)
+else
+	warn("Clipboard not supported.")
+end
