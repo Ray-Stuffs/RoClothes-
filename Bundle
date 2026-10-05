@@ -59,11 +59,22 @@ local function lit(v)
 	return tostring(v)
 end
 
+local rigidTypes = {
+	[Enum.AccessoryType.Hat] = true,
+	[Enum.AccessoryType.Hair] = true,
+	[Enum.AccessoryType.Face] = true,
+	[Enum.AccessoryType.Neck] = true,
+	[Enum.AccessoryType.Shoulder] = true,
+	[Enum.AccessoryType.Front] = true,
+	[Enum.AccessoryType.Back] = true,
+	[Enum.AccessoryType.Waist] = true,
+}
+
 local function getAccessories()
 	local ids, seen = {}, {}
 	for _, acc in ipairs(desc:GetAccessories(true)) do
 		local id = acc.AssetId
-		if id ~= 0 and not seen[id] then
+		if rigidTypes[acc.AccessoryType] and not acc.IsLayered and id ~= 0 and not seen[id] then
 			seen[id] = true
 			table.insert(ids, id)
 		end
